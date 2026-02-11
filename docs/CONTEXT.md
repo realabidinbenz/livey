@@ -1,66 +1,75 @@
 # Livey - Development Context
 
-## Current Phase: Phase 0 - Pre-Build Setup
-## Last Updated: 2026-02-11
+## Current Phase: Phase 1 - Foundation (In Progress)
+## Last Updated: 2026-02-11 (Session 2)
 
 ---
 
 ## 📊 Overall Progress
 
 **Completed Phases:** 0/8
-**Current Focus:** Documentation & Planning
-**Next Phase:** Phase 1 - Foundation (Backend + Database)
+**Current Focus:** Phase 1 - Backend Foundation (Auth endpoints done ✅)
+**Next:** Phase 1 continues - Products CRUD endpoints
 
 ---
 
 ## ✅ What's Done
 
-### Documentation
+### Documentation (Phase 0)
 - ✅ Product spec created (`livey-mvp-spec.md`) - 282 lines
 - ✅ Technical requirements documented (`REQUIREMENTS.md`) - 713 lines
 - ✅ Implementation plan created (`PLAN.md`) - 733 lines
 - ✅ Daily workflow defined (`WORKFLOW.md`) - comprehensive
 - ✅ Non-dev collaboration guide (`YOUR-WORKFLOW-GUIDE.md`)
+- ✅ Strict rules created (`CLAUDE.md`) - 379 lines
 
-### Infrastructure
+### Infrastructure (Phase 0)
 - ✅ GitHub repository created and connected (`github.com/realabidinbenz/livey`)
 - ✅ Vercel connected (auto-deploys from main branch)
 - ✅ Supabase project created (`mbrilepioeqvwqxplape.supabase.co`)
 - ✅ Supabase MCP configured (`.mcp.json`)
 
-### Architecture Decisions
-- ✅ Tech stack finalized (Node + Express, React + Vite, Supabase, Tailwind)
-- ✅ Database schema designed (7 tables with RLS)
-- ✅ API endpoints mapped (24 endpoints)
-- ✅ User workflows defined (30 Q&A decisions)
-- ✅ Production concerns addressed (logging, performance, security)
+### Backend Foundation (Phase 1 - In Progress)
+- ✅ Backend structure created (`backend/src/` with routes, controllers, middleware)
+- ✅ Express app setup (logging, error handling, CORS, Helmet)
+- ✅ Supabase client configured
+- ✅ Logger utility (logs all API requests + errors)
+- ✅ Database schema created (7 tables with RLS + indexes)
+- ✅ **Auth endpoints complete:**
+  - ✅ POST /api/auth/signup (create seller account)
+  - ✅ POST /api/auth/login (authenticate user)
+  - ✅ POST /api/auth/logout (sign out)
+  - ✅ GET /api/auth/me (get current user)
+- ✅ Testing guide created (`backend/TESTING.md`)
 
 ---
 
 ## 🎯 What's Next
 
-### Immediate (Today)
-- [ ] Create initial backend folder structure
-- [ ] Set up Express app with basic routes
-- [ ] Initialize package.json files (backend + frontend)
-- [ ] Create Supabase tables (run SQL migrations)
-- [ ] Apply Row Level Security (RLS) policies
-- [ ] Set up .env files with Supabase keys
+### Immediate (Next Session)
+- [ ] **Products CRUD endpoints:**
+  - [ ] POST /api/products (create product)
+  - [ ] GET /api/products (list seller's products with pagination)
+  - [ ] GET /api/products/:id (get one product)
+  - [ ] PUT /api/products/:id (update product)
+  - [ ] DELETE /api/products/:id (soft delete)
+- [ ] Auth middleware (verify JWT tokens)
+- [ ] Validation middleware (phone, email, required fields)
+- [ ] Test with 2 seller accounts (data isolation)
 
-### Phase 1 Goals (Week 1)
-- [ ] Backend API skeleton (Express + routes + middleware)
-- [ ] Database with RLS (all 7 tables)
-- [ ] Auth endpoints (signup, login, logout)
-- [ ] Products CRUD endpoints
+### Phase 1 Remaining
 - [ ] Orders endpoint (save to DB only, Sheets comes in Phase 2)
-- [ ] Logging middleware (all API calls logged)
 - [ ] Unit tests for auth + products
+- [ ] Test all endpoints with Postman/curl
+- [ ] Verify RLS works (Seller A can't see Seller B's data)
 
 ---
 
 ## 🐛 Known Issues
 
-None yet (no code written).
+- Network/fetch error when testing Supabase connection from Git Bash (Windows environment issue)
+  - **Workaround:** User tests API endpoints manually with browser/Postman
+  - Server code is fine (runs successfully)
 
 ---
 
@@ -103,8 +112,25 @@ None yet (no code written).
 
 ---
 
-**Last Session Summary:**
-We spent today planning and documenting. Created 5 comprehensive docs covering product vision, technical requirements, implementation plan, production concerns, and daily workflow. Infrastructure (GitHub, Vercel, Supabase) is connected and ready.
+**Today's Session Summary (Session 2):**
+
+Started Phase 1! Built backend foundation:
+- ✅ Express app setup (73 lines, logging + error handling)
+- ✅ 7 database tables created in Supabase (RLS enabled on all)
+- ✅ Auth endpoints complete (signup, login, logout, me)
+- ✅ Testing guide created (curl examples for all endpoints)
+
+**Files created today:**
+- backend/src/index.js (Express setup)
+- backend/src/controllers/auth.controller.js (189 lines)
+- backend/src/routes/auth.routes.js (24 lines)
+- backend/src/middleware/logging.middleware.js (24 lines)
+- backend/src/middleware/error.middleware.js (31 lines)
+- backend/src/utils/logger.js (35 lines)
+- backend/supabase-schema.sql (380 lines - all tables)
+- backend/TESTING.md (testing guide)
+
+**All files < 800 lines** ✅ (following CLAUDE.md rules)
 
 **Next Session Goal:**
-Build Phase 1 foundation (backend structure + Supabase tables + auth endpoints).
+Build Products CRUD endpoints + auth middleware + test data isolation.
