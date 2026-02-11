@@ -12,13 +12,20 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const WIDGET_ORIGINS = process.env.WIDGET_ORIGINS || ''; // Comma-separated list of allowed widget origins
 
 // Security middleware
 app.use(helmet());
 
-// CORS configuration
+// CORS configuration - allow frontend + widget origins
+const allowedOrigins = [FRONTEND_URL, ...WIDGET_ORIGINS.split(',').filter(Boolean)];
 app.use(cors({
-  origin: FRONTEND_URL,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
 
@@ -43,10 +50,12 @@ app.get('/health', (req, res) => {
 import authRoutes from './routes/auth.routes.js';
 import productsRoutes from './routes/products.routes.js';
 import ordersRoutes from './routes/orders.routes.js';
+import sheetsRoutes from './routes/sheets.routes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/orders', ordersRoutes);
+app.use('/api/sheets', sheetsRoutes);
 
 // 404 handler
 app.use((req, res) => {
