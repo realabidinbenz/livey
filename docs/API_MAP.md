@@ -496,6 +496,137 @@ All errors follow this structure:
 
 ---
 
+## 📊 Google Sheets Endpoints
+
+### Connect to Google Sheets
+```
+POST /api/sheets/connect
+```
+**Authenticated:** Yes
+**Response:** 200
+```json
+{
+  "authUrl": "https://accounts.google.com/o/oauth2/v2/auth?client_id=..."
+}
+```
+**Usage:** Frontend redirects user to `authUrl` to grant Google Sheets permission
+
+---
+
+### OAuth Callback
+```
+GET /api/sheets/callback?code=xxx&state=xxx
+```
+**Public:** Yes (Google redirects here)
+**Response:** Redirects to frontend
+- Success: `${FRONTEND_URL}/dashboard/settings?sheets=connected`
+- Error: `${FRONTEND_URL}/dashboard/settings?sheets_error=<error_type>`
+
+**What happens:**
+1. Validates state (CSRF protection)
+2. Exchanges code for tokens
+3. Creates new "Livey Orders" spreadsheet with headers
+4. Encrypts refresh token
+5. Saves connection to database
+
+---
+
+### Connection Status
+```
+GET /api/sheets/status
+```
+**Authenticated:** Yes
+**Response:** 200
+```json
+{
+  "connected": true,
+  "spreadsheetId": "1A2B3C...",
+  "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/...",
+  "connectedAt": "2026-02-11T10:00:00Z",
+  "lastSyncAt": "2026-02-11T11:45:00Z",
+  "pendingSyncCount": 3
+}
+```
+Or if not connected:
+```json
+{
+  "connected": false,
+  "message": "No Google Sheets connection found"
+}
+```
+
+---
+
+### Test Connection
+```
+POST /api/sheets/test
+```
+**Authenticated:** Yes
+**Response:** 200
+```json
+{
+  "success": true,
+  "message": "Connection is valid",
+  "spreadsheetId": "1A2B3C...",
+  "spreadsheetTitle": "Livey Orders"
+}
+```
+**Errors:**
+- 401: Token revoked → `{ error: { code: 'token_revoked', message: '...' }}`
+- 404: Sheet deleted → `{ error: { code: 'sheet_deleted', message: '...' }}`
+
+---
+
+### Disconnect
+```
+DELETE /api/sheets/disconnect
+```
+**Authenticated:** Yes
+**Response:** 200
+```json
+{
+  "success": true,
+  "message": "Google Sheets disconnected successfully"
+}
+```
+**Side effects:**
+- Revokes Google token (best effort)
+- Deletes connection from database
+- Future orders will NOT sync to Sheets
+
+---
+
+## ⚙️ Background Jobs
+
+### Retry Failed Syncs
+```
+POST /api/cron/sync-sheets
+```
+**Authentication:** `x-cron-secret` header or `Authorization: Bearer <CRON_SECRET>`
+**Response:** 200
+```json
+{
+  "success": true,
+  "total": 10,
+  "processed": 5,
+  "succeeded": 3,
+  "failed": 2,
+  "skipped": 5,
+  "message": "Processed 5 orders: 3 succeeded, 2 failed, 5 skipped (backoff)"
+}
+```
+
+**What it does:**
+- Finds orders with `google_sheets_synced = false`
+- Applies exponential backoff (5min → 15min → 45min → 2.25hr)
+- Retries up to 10 times, then gives up
+- Called by Vercel Cron or manually
+
+**Errors:**
+- 401: Invalid or missing cron secret
+
+---
+
 **Last Updated:** 2026-02-11
-**Phase:** 1 (Foundation)
-**Next Phase:** Google Sheets Integration
+**Phase:** 2 (Google Sheets Integration)
+**Next Phase:** Live Sessions Backend
