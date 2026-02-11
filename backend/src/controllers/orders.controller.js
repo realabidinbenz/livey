@@ -1,4 +1,5 @@
-import { supabase } from '../config/supabase.js';
+import { supabaseAdmin } from '../config/supabase.js';
+import { syncOrderToSheets } from '../services/sheets.sync.service.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -10,15 +11,15 @@ import logger from '../utils/logger.js';
  */
 
 /**
- * Generate Order Number
- * Format: ORD-YYYYMMDD-001 (sequential per day)
+ * Generate Order Number with retry on collision
+ * Format: ORD-YYYYMMDD-001 (sequential per day per seller)
  */
 const generateOrderNumber = async (sellerId) => {
   const today = new Date().toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
   const prefix = `ORD-${today}`;
 
   // Get today's order count for this seller
-  const { count, error } = await supabase
+  const { count, error } = await supabaseAdmin
     .from('orders')
     .select('*', { count: 'exact', head: true })
     .eq('seller_id', sellerId)
@@ -34,6 +35,41 @@ const generateOrderNumber = async (sellerId) => {
 };
 
 /**
+ * Insert order with retry on order_number collision
+ * If two concurrent requests generate the same number, retry with count+1
+ */
+const insertOrderWithRetry = async (orderData, sellerId, maxRetries = 3) => {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const orderNumber = attempt === 0
+      ? orderData.order_number
+      : await generateOrderNumber(sellerId);
+
+    const { data: order, error } = await supabaseAdmin
+      .from('orders')
+      .insert([{ ...orderData, order_number: orderNumber }])
+      .select()
+      .single();
+
+    if (!error) return { order, error: null };
+
+    // If it's a unique constraint violation on order_number, retry
+    const isDuplicate = error.message?.includes('duplicate') ||
+                        error.message?.includes('unique') ||
+                        error.code === '23505';
+
+    if (!isDuplicate || attempt === maxRetries - 1) {
+      return { order: null, error };
+    }
+
+    logger.warn('Order number collision, retrying', {
+      orderNumber,
+      attempt: attempt + 1,
+      sellerId
+    });
+  }
+};
+
+/**
  * Create Order (PUBLIC - no auth required)
  * POST /api/orders
  * Body: {
@@ -42,7 +78,7 @@ const generateOrderNumber = async (sellerId) => {
  *   customer_name: string,
  *   customer_phone: string,
  *   customer_address: string,
- *   quantity: number
+ *   quantity: number (optional, default 1)
  * }
  */
 export const createOrder = async (req, res, next) => {
@@ -66,11 +102,11 @@ export const createOrder = async (req, res, next) => {
       });
     }
 
-    // Validate quantity
-    const orderQuantity = quantity || 1;
-    if (typeof orderQuantity !== 'number' || orderQuantity < 1) {
+    // Validate quantity (must be a positive integer, default 1)
+    const orderQuantity = (quantity === undefined || quantity === null) ? 1 : quantity;
+    if (typeof orderQuantity !== 'number' || !Number.isInteger(orderQuantity) || orderQuantity < 1) {
       return res.status(400).json({
-        error: { message: 'Quantity must be a positive number', status: 400 }
+        error: { message: 'Quantity must be a positive integer', status: 400 }
       });
     }
 
@@ -86,7 +122,7 @@ export const createOrder = async (req, res, next) => {
     }
 
     // Fetch product (need to snapshot name, price, seller_id)
-    const { data: product, error: productError } = await supabase
+    const { data: product, error: productError } = await supabaseAdmin
       .from('products')
       .select('id, name, price, stock, seller_id')
       .eq('id', product_id)
@@ -99,7 +135,7 @@ export const createOrder = async (req, res, next) => {
       });
     }
 
-    // Calculate total price
+    // Calculate total price (server-side, never trust client)
     const totalPrice = product.price * orderQuantity;
 
     // Generate order number
@@ -109,7 +145,7 @@ export const createOrder = async (req, res, next) => {
     if (product.stock !== null) {
       const newStock = product.stock - orderQuantity;
 
-      const { error: stockError } = await supabase
+      const { error: stockError } = await supabaseAdmin
         .from('products')
         .update({ stock: newStock })
         .eq('id', product_id);
@@ -119,35 +155,36 @@ export const createOrder = async (req, res, next) => {
           productId: product_id,
           error: stockError.message
         });
-        // Don't block order if stock update fails (seller can handle manually)
+        // Don't block order if stock update fails (seller handles manually per MVP spec)
       }
     }
 
-    // Create order
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .insert([{
-        order_number: orderNumber,
-        session_id: session_id || null,
-        product_id: product.id,
-        seller_id: product.seller_id,
-        customer_name: customer_name.trim(),
-        customer_phone: customer_phone.trim(),
-        customer_address: customer_address.trim(),
-        product_name: product.name, // Snapshot
-        product_price: product.price, // Snapshot
-        quantity: orderQuantity,
-        total_price: totalPrice,
-        status: 'pending'
-      }])
-      .select()
-      .single();
+    // Create order with retry on number collision
+    const orderData = {
+      order_number: orderNumber,
+      session_id: session_id || null,
+      product_id: product.id,
+      seller_id: product.seller_id,
+      customer_name: customer_name.trim(),
+      customer_phone: customer_phone.trim(),
+      customer_address: customer_address.trim(),
+      product_name: product.name,
+      product_price: product.price,
+      quantity: orderQuantity,
+      total_price: totalPrice,
+      status: 'pending'
+    };
 
-    if (orderError) {
+    const { order, error: orderError } = await insertOrderWithRetry(
+      orderData,
+      product.seller_id
+    );
+
+    if (orderError || !order) {
       logger.error('Create order failed', {
         productId: product_id,
         sellerId: product.seller_id,
-        error: orderError.message
+        error: orderError?.message
       });
       return res.status(500).json({
         error: { message: 'Failed to create order', status: 500 }
@@ -162,6 +199,14 @@ export const createOrder = async (req, res, next) => {
       productName: order.product_name,
       quantity: order.quantity,
       totalPrice: order.total_price
+    });
+
+    // Fire-and-forget: sync to Google Sheets (async, non-blocking)
+    syncOrderToSheets(order).catch((err) => {
+      logger.error('Sheets sync fire-and-forget error', {
+        orderId: order.id,
+        error: err.message
+      });
     });
 
     res.status(201).json({ order });
@@ -180,8 +225,7 @@ export const listOrders = async (req, res, next) => {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100); // Max 100
     const offset = parseInt(req.query.offset) || 0;
 
-    // Query orders with pagination (RLS automatically filters by seller_id)
-    const { data: orders, error, count } = await supabase
+    const { data: orders, error, count } = await supabaseAdmin
       .from('orders')
       .select('*', { count: 'exact' })
       .eq('seller_id', sellerId)
@@ -218,8 +262,7 @@ export const getOrderById = async (req, res, next) => {
     const sellerId = req.user.id;
     const { id } = req.params;
 
-    // Query order (RLS ensures seller can only access their own orders)
-    const { data: order, error } = await supabase
+    const { data: order, error } = await supabaseAdmin
       .from('orders')
       .select('*')
       .eq('id', id)
@@ -260,8 +303,24 @@ export const updateOrderStatus = async (req, res, next) => {
       });
     }
 
-    // Update order status (RLS ensures seller can only update their own orders)
-    const { data: order, error } = await supabase
+    // Fetch current order to log the old status
+    const { data: currentOrder } = await supabaseAdmin
+      .from('orders')
+      .select('status')
+      .eq('id', id)
+      .eq('seller_id', sellerId)
+      .single();
+
+    if (!currentOrder) {
+      return res.status(404).json({
+        error: { message: 'Order not found', status: 404 }
+      });
+    }
+
+    const oldStatus = currentOrder.status;
+
+    // Update order status
+    const { data: order, error } = await supabaseAdmin
       .from('orders')
       .update({ status })
       .eq('id', id)
@@ -284,7 +343,7 @@ export const updateOrderStatus = async (req, res, next) => {
       orderId: order.id,
       orderNumber: order.order_number,
       sellerId,
-      oldStatus: order.status,
+      oldStatus,
       newStatus: status
     });
 
