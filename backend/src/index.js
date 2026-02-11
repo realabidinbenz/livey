@@ -51,11 +51,13 @@ import authRoutes from './routes/auth.routes.js';
 import productsRoutes from './routes/products.routes.js';
 import ordersRoutes from './routes/orders.routes.js';
 import sheetsRoutes from './routes/sheets.routes.js';
+import cronRoutes from './routes/cron.routes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/sheets', sheetsRoutes);
+app.use('/api/cron', cronRoutes);
 
 // 404 handler
 app.use((req, res) => {
