@@ -4,8 +4,22 @@
  */
 
 /**
+ * Normalize Algerian phone number
+ * Handles: +213, 213 prefix, spaces, dashes, dots, parentheses
+ * Returns cleaned 10-digit number starting with 0
+ */
+export const normalizePhone = (phone) => {
+  if (typeof phone !== 'string') return '';
+  let cleaned = phone.replace(/[\s\-\.\(\)]/g, '');
+  if (cleaned.startsWith('+213')) cleaned = '0' + cleaned.slice(4);
+  else if (cleaned.startsWith('213')) cleaned = '0' + cleaned.slice(3);
+  return cleaned;
+};
+
+/**
  * Validate Algerian phone number
  * Format: 05|06|07 + 8 digits (10 total)
+ * Call normalizePhone() first for best results
  */
 export const validatePhone = (phone) => {
   const phoneRegex = /^(05|06|07)\d{8}$/;

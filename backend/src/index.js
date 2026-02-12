@@ -1,9 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import hpp from 'hpp';
 import dotenv from 'dotenv';
 import { loggingMiddleware } from './middleware/logging.middleware.js';
 import { errorMiddleware } from './middleware/error.middleware.js';
+import { globalLimiter } from './middleware/rateLimiter.middleware.js';
+import { sanitizeMiddleware } from './middleware/sanitize.middleware.js';
 import logger from './utils/logger.js';
 
 // Load environment variables
@@ -16,6 +19,8 @@ const WIDGET_ORIGINS = process.env.WIDGET_ORIGINS || ''; // Comma-separated list
 
 // Security middleware
 app.use(helmet());
+app.use(hpp());
+app.use(globalLimiter);
 
 // CORS configuration - allow frontend + widget origins
 const allowedOrigins = [FRONTEND_URL, ...WIDGET_ORIGINS.split(',').filter(Boolean)];
@@ -24,14 +29,19 @@ app.use(cors({
     // Allow requests with no origin (mobile apps, curl, Postman)
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error('Not allowed by CORS'));
+    const err = new Error('Not allowed by CORS');
+    err.status = 403;
+    callback(err);
   },
   credentials: true
 }));
 
-// Body parser
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Body parser with size limits (prevents payload DoS)
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// Input sanitization (strip XSS patterns from all inputs)
+app.use(sanitizeMiddleware);
 
 // Logging middleware (log all requests)
 app.use(loggingMiddleware);
@@ -52,12 +62,18 @@ import productsRoutes from './routes/products.routes.js';
 import ordersRoutes from './routes/orders.routes.js';
 import sheetsRoutes from './routes/sheets.routes.js';
 import cronRoutes from './routes/cron.routes.js';
+import sessionsRoutes from './routes/sessions.routes.js';
+import chatRoutes from './routes/chat.routes.js';
+import widgetRoutes from './routes/widget.routes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/sheets', sheetsRoutes);
 app.use('/api/cron', cronRoutes);
+app.use('/api/sessions', sessionsRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/widget', widgetRoutes);
 
 // 404 handler
 app.use((req, res) => {

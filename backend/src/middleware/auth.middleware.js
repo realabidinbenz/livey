@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase.js';
+import { supabaseAuth } from '../config/supabase.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -19,8 +19,8 @@ export const requireAuth = async (req, res, next) => {
 
     const token = authHeader.replace('Bearer ', '');
 
-    // Verify token with Supabase Auth
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    // Verify token with Supabase Auth (uses anon client for auth verification only)
+    const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
 
     if (error || !user) {
       logger.warn('Invalid token', { error: error?.message });
