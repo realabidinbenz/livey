@@ -4,9 +4,26 @@ This file tracks bugs, edge cases, and future improvements.
 
 ---
 
-## 🐛 BUGS (Need to Fix)
+## 🐛 BUGS (Fixed)
 
-_None yet (no code written)._
+### Session 5 (Phase 2 Review)
+- [x] Off-by-one retry limit: cron queried `.lte(10)` = 11 attempts → fixed to `.lt(10)`
+- [x] Pending sync count included permanently failed orders → added `sync_retry_count < 10` filter
+- [x] Dead code: unused `getDriveClient` function → removed
+- [x] Missing input length validation → added customer_name (100 chars) and address (500 chars) limits
+- [x] CORS rejection returned 500 → now returns 403
+
+### Session 6 (Security Hardening)
+- [x] Order number race condition under concurrency → switched to random hex (no DB query)
+- [x] Phone validation rejected +213 and spaced numbers → added normalizePhone()
+- [x] No rate limiting on any endpoint → added global, auth, and order rate limiters
+- [x] No input sanitization → added XSS-stripping middleware
+- [x] No request size limits → added 1MB body limit
+- [x] RLS bypassed by admin client (misleading docs) → added sellerQuery() helper, updated docs
+
+### Known Limitations (Not Blocking MVP)
+- In-memory OAuth state store won't persist on serverless (fine on Railway)
+- Access tokens stored in plain text (short-lived, 1hr expiry, acceptable for MVP)
 
 ---
 

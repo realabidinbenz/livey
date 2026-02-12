@@ -43,7 +43,7 @@
 ### Third-Party Integrations
 - **YouTube:** YouTube IFrame Player API
 - **Google Sheets:** Google Sheets API v4 (OAuth 2.0)
-- **Deployment:** Vercel (monorepo)
+- **Deployment:** Vercel (frontend) + Railway (backend)
 
 ### Development Tools
 - **Version Control:** Git + GitHub
@@ -90,8 +90,8 @@ livey/
 ```
 
 ### Deployment Architecture
-- **Frontend:** Vercel (static hosting + edge functions)
-- **Backend API:** Vercel Serverless Functions
+- **Frontend:** Vercel (static hosting)
+- **Backend API:** Railway (always-on process, $5/mo)
 - **Database:** Supabase Cloud (PostgreSQL)
 - **CDN:** Vercel Edge Network
 - **Widget:** Served from `/widget/livey-widget.js` (cached at edge)
@@ -376,7 +376,7 @@ GET    /widget/livey-widget.js   # Widget JavaScript file (served from frontend)
 
 **Widget Components:**
 1. YouTube video player (IFrame API)
-2. Product card overlay
+2. Product card (below/beside player)
 3. Chat panel (real-time updates)
 4. Order form modal (slides up from bottom on mobile)
 5. Order confirmation screen
@@ -604,27 +604,11 @@ VITE_API_URL=https://livey.vercel.app/api
 
 ## 🚀 DEPLOYMENT
 
-### Vercel Configuration (`vercel.json`)
-```json
-{
-  "version": 2,
-  "builds": [
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
-    },
-    {
-      "src": "backend/src/index.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/backend/src/index.js" },
-    { "src": "/(.*)", "dest": "/frontend/dist/$1" }
-  ]
-}
-```
+### Deployment Split
+- **Frontend (React/Vite):** Deploy to Vercel from `frontend/` directory
+- **Backend (Express):** Deploy to Railway from `backend/` directory
+- Railway provides: always-on process, native cron (5-min minimum), WebSocket support
+- Vercel cron limitations (daily only, GET only) make it unsuitable for the backend
 
 ### GitHub Actions (Optional - Auto Deploy)
 - Push to `main` → Auto-deploy to Vercel production
@@ -644,6 +628,17 @@ VITE_API_URL=https://livey.vercel.app/api
 - All seller endpoints require authentication (JWT in `Authorization` header)
 - Public endpoints: `/api/orders` (POST), `/api/widget/*`, `/api/chat/*/messages` (GET, POST)
 - CORS enabled only for widget domains
+
+### Rate Limiting
+- Global: 100 requests/minute per IP
+- Auth (login/signup): 5 requests/15 minutes per IP
+- Public orders: 10 requests/15 minutes per IP
+- Request body size: 1MB maximum
+
+### Input Sanitization
+- All string inputs stripped of HTML/script tags (XSS prevention)
+- HPP (HTTP Parameter Pollution) protection enabled
+- Phone numbers normalized before validation (handles +213, spaces)
 
 ### Data Validation
 - All inputs sanitized (prevent XSS)

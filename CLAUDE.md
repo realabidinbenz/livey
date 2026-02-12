@@ -2,7 +2,8 @@
 
 **Project:** Livey MVP - Live shopping widget for Algerian sellers
 **Stack:** Node.js + Express, React + Vite, Supabase, Google Sheets API
-**Status:** Phase 0 → Starting Phase 1 (Backend Foundation)
+**Deployment:** Frontend → Vercel | Backend → Railway ($5/mo)
+**Status:** Phase 2 complete → Starting Phase 3
 
 ---
 
@@ -29,7 +30,8 @@ If this doesn't convert at 3x, nothing else matters.
   - `docs/tasks/phaseX.md` - Current phase checklist
 
 ### 3. DATA ISOLATION IS CRITICAL
-- Row Level Security (RLS) on EVERY table
+- Primary isolation: `sellerQuery()` / `sellerSelect()` helpers in controller code (filters by seller_id)
+- RLS enabled on every table as a backup layer (admin client bypasses RLS, so controller-level filtering is the real defense)
 - Test with 2 seller accounts before marking feature "done"
 - Seller A MUST NOT see Seller B's data (products, orders, sessions)
 
@@ -77,6 +79,14 @@ Before I run anything, explain end-to-end:
 - "How does data flow from form → API → DB → Sheets?"
 
 Catch disconnects before they become bugs.
+
+### 11. SECURITY HARDENING (OWASP)
+- Rate limiting on all routes (global: 100/min, auth: 5/15min, orders: 10/15min)
+- Input sanitization on all string inputs (strip HTML/script tags)
+- Request body size limit: 1MB
+- HPP (HTTP Parameter Pollution) protection enabled
+- Phone numbers normalized before validation (handles +213, spaces, dashes)
+- Never trust client-side calculations (total_price computed server-side)
 
 ---
 
@@ -337,10 +347,10 @@ Fix issues BEFORE moving to next feature.
 
 ## 🎯 CURRENT PHASE
 
-**Phase:** Phase 0 (Pre-Build)
-**Next:** Phase 1 - Backend Foundation
+**Phase:** Phase 2 complete
+**Next:** Phase 3
 
-**Read before building:** `docs/tasks/phase1.md`
+**Read before building:** `docs/tasks/phase3.md`
 
 ---
 

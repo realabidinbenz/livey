@@ -405,11 +405,11 @@ logger.error('API error', {
 ```
 
 ### Logging Tool
-- **Option 1:** Console.log (free, works in Vercel logs)
+- **Option 1:** Console.log (free, works in Railway logs)
 - **Option 2:** Sentry (error tracking, free tier: 5k events/month)
 - **Option 3:** LogTail / Better Stack (structured logs, searchable)
 
-**For MVP:** Start with console.log + Vercel logs. Upgrade to Sentry if we get real users.
+**For MVP:** Start with console.log + Railway logs. Upgrade to Sentry if we get real users.
 
 ---
 
@@ -585,7 +585,7 @@ logger.error('API error', {
 
 **Tasks:**
 - [ ] Invite 3-5 sellers to test (friends, family, anyone)
-- [ ] Monitor Vercel logs daily (check for errors)
+- [ ] Monitor Railway + Vercel logs daily (check for errors)
 - [ ] Monitor Supabase dashboard (query performance, storage)
 - [ ] Fix bugs as they're reported
 - [ ] Gather feedback (what's confusing, what's missing)
@@ -658,10 +658,13 @@ Before showing Livey to real sellers:
 
 ### Security
 - [ ] All tables have Row Level Security (RLS) enabled
+- [ ] sellerQuery() helper used in all seller-facing controllers
 - [ ] Tested data isolation (Seller A can't see Seller B's data)
 - [ ] Google refresh tokens encrypted in database
 - [ ] No API keys in frontend code (only public keys)
 - [ ] CORS enabled only for widget domains
+- [ ] Rate limiting on all routes (global, auth, orders)
+- [ ] Input sanitization (XSS prevention) on all inputs
 
 ### Performance
 - [ ] All queries use indexes (check Supabase query analyzer)

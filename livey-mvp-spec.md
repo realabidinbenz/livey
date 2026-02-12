@@ -102,7 +102,7 @@ The seller already calls the customer to confirm COD anyway — they'll sort out
 
 ### 1. Embeddable Widget
 - YouTube video player (live or replay)
-- Product card overlay (name, price, image)
+- Product card beside/below player (name, price, image — YouTube ToS prohibits overlays on player)
 - ORDER NOW button (always visible)
 - Simple chat panel
 - Works on any website (Shopify, WordPress, static HTML)

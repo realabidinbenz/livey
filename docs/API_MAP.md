@@ -627,6 +627,56 @@ POST /api/cron/sync-sheets
 
 ---
 
-**Last Updated:** 2026-02-11
-**Phase:** 2 (Google Sheets Integration)
-**Next Phase:** Live Sessions Backend
+## Widget Endpoints
+
+### Get Widget Data
+```
+GET /api/widget/:sessionId
+```
+**Public:** Yes
+**Response:**
+```json
+{
+  "session": {
+    "id": "uuid",
+    "seller_id": "uuid",
+    "youtube_video_id": "dQw4w9WgXcQ",
+    "status": "live",
+    "started_at": "2026-02-12T10:00:00Z",
+    "ended_at": null
+  },
+  "products": [
+    {
+      "id": "uuid",
+      "name": "Product Name",
+      "price": 50000,
+      "image_url": "https://example.com/image.jpg"
+    }
+  ],
+  "pinned_product": {
+    "product_id": "uuid",
+    "products": {
+      "name": "Pinned Product",
+      "price": 75000,
+      "image_url": "https://example.com/pinned.jpg"
+    }
+  },
+  "messages": [
+    {
+      "id": "uuid",
+      "sender_name": "Ahmed",
+      "message": "Hello!",
+      "is_seller": false,
+      "created_at": "2026-02-12T10:05:00Z"
+    }
+  ]
+}
+```
+**Errors:**
+- 404: Session not found or has ended
+
+---
+
+**Last Updated:** 2026-02-12
+**Phase:** 4 (Widget Frontend)
+**Next Phase:** Seller Dashboard

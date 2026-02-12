@@ -277,5 +277,112 @@ GET /api/orders?limit=50&offset=50 // Next 50 orders
 
 ---
 
-**Last Updated:** 2026-02-11
-**Next Review:** After Phase 1 completion
+## 2026-02-11: Railway for Backend (Not Vercel)
+
+**Decision:** Deploy backend on Railway ($5/mo), frontend on Vercel (free).
+
+**Why Vercel Won't Work for Backend:**
+- Vercel cron on Hobby plan: once per day minimum (we need every 5 min for Sheets retry)
+- Vercel cron sends GET only — our `POST /api/cron/sync-sheets` won't be called
+- In-memory OAuth state store dies between serverless invocations (OAuth callback always fails)
+- No WebSocket support (needed for Supabase Realtime server-side subscriptions)
+- Serverless spins down between requests (bad for live sessions)
+
+**What Railway Provides:**
+- Always-on process (no cold starts)
+- Native cron (5-min minimum)
+- WebSocket support
+- Persistent in-memory state
+- $5/month (acceptable for MVP)
+
+**Total Cost:** ~$5/month (Railway) + $0 (Vercel frontend) + $0 (Supabase free tier)
+
+---
+
+## 2026-02-11: Admin Client + sellerQuery() (Not Per-Request JWT)
+
+**Decision:** Keep using `supabaseAdmin` (service role) for all DB queries, but add `sellerQuery()` helper to enforce seller_id filtering.
+
+**Why:**
+- RLS policies exist on all tables but are bypassed by the admin client
+- Primary data isolation is enforced by `sellerQuery()` / `sellerSelect()` helpers
+- RLS serves as a backup layer (defense in depth)
+- Per-request JWT client would be more secure but requires significant refactoring
+
+**Alternative Considered:**
+- **Per-request Supabase client using user's JWT:** RLS would actually enforce isolation
+  - **Pros:** True database-level security, can't forget seller_id filter
+  - **Cons:** More complex middleware, harder to debug, significant refactor of all controllers
+  - **When to revisit:** If team grows beyond 1 dev, or if a data isolation bug is found
+
+---
+
+## 2026-02-11: Adjacent Widget Layout (YouTube ToS Compliance)
+
+**Decision:** Product card, chat panel, and order form are placed beside/below the YouTube player, never overlapping it.
+
+**Why:**
+YouTube Developer Policies state: "You must not display overlays, frames, or other visual elements in front of any part of a YouTube embedded player, including player controls." Violating this could get API access revoked.
+
+**Layout:**
+- Desktop: Player top/left, product card + chat below/right
+- Mobile: Stack vertically (player top, product card middle, chat bottom)
+
+---
+
+## 2026-02-11: Random Hex Order Numbers (Not Sequential)
+
+**Decision:** Order numbers use format `ORD-YYYYMMDD-XXXX` (4 random hex chars) instead of sequential `ORD-YYYYMMDD-001`.
+
+**Why:**
+- Sequential numbers had a race condition under concurrent requests
+- Random hex eliminates DB queries for number generation (faster)
+- Collision probability: ~1 in 65,536 per day — acceptable for MVP volume
+
+---
+
+## 2026-02-12: Library Recommendations (All Phases)
+
+**Decision:** Audit and lock in library choices for Phases 3-6 before building further.
+
+### Phase 3 Backend — No New Dependencies
+
+**Decision:** Zero new npm packages for Phase 3.
+
+**Why:**
+- **YouTube URL parsing:** 15-line regex in `utils/youtube.js` replaces unmaintained npm packages (`get-youtube-id` last updated 2019, `get-video-id` last updated 2021). Handles all formats: `watch?v=`, `youtu.be/`, `live/`, `embed/`, `shorts/`, `/v/`.
+- **YouTube validation:** `googleapis` already installed — use YouTube Data API v3 to verify video exists.
+- **Real-time chat:** Built into `@supabase/supabase-js` Realtime — no new library.
+- **Logging:** Custom `logger.js` (console.log with JSON format) works for MVP. Upgrade to `pino` only if Railway log volume demands structured search.
+- **Validation:** Hand-rolled validators work for current ~5 rules. Consider `zod` only if rules exceed 15+.
+
+### Frontend Libraries (Phases 4-6)
+
+**Decision:** Lean stack targeting < 50 KB gzipped for the widget bundle.
+
+| Package | Size (gzip) | Purpose | Alternative Rejected |
+|---------|------------|---------|---------------------|
+| `react-router-dom` v7 | 14 KB | Routing (4-5 routes) | — |
+| `zustand` | 1.2 KB | State (2-3 stores) | Redux (overkill), Context (re-render issues) |
+| `ky` | 3.3 KB | HTTP client (fetch wrapper) | `axios` (11.7 KB, no benefit) |
+| `react-hook-form` | 9 KB | Forms (order form) | `formik` (15 KB, 7 deps, more re-renders) |
+| `dayjs` | 2 KB | Date formatting (has `ar-dz` locale) | `date-fns` (6 KB), `moment` (67 KB, deprecated) |
+| `sonner` | 5 KB | Toast notifications | `react-toastify` (16 KB) |
+| `daisyUI` | 3 KB CSS | Tailwind components (no JS) | `shadcn/ui` (slower setup) |
+| `vitest` | dev only | Frontend test runner (native Vite) | jest (more config) |
+
+**Total additions: ~37.5 KB** — lighter than jQuery alone.
+
+**Phase-by-phase install plan:**
+- Phase 4 (Widget): `ky`, `dayjs`, `sonner`, `react-hook-form`, Tailwind, `vitest`
+- Phase 5 (Dashboard): `react-router-dom`, `zustand`, `daisyui`
+- Phase 6 (Control Panel): No new libraries
+
+**Explicitly NOT using:** `axios`, `formik`, `luxon`, `react-toastify`, `redux`, `moment`, `winston`.
+
+**Backend keep `node --test`** — zero-dependency, works great. `vitest` is frontend only.
+
+---
+
+**Last Updated:** 2026-02-12
+**Next Review:** After Phase 3 completion
