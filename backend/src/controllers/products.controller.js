@@ -1,4 +1,5 @@
-import { supabase } from '../config/supabase.js';
+import { supabaseAdmin } from '../config/supabase.js';
+import { sellerSelect } from '../utils/query.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -6,6 +7,36 @@ import logger from '../utils/logger.js';
  * Handles product CRUD operations
  * All endpoints require authentication (req.user is set by auth middleware)
  */
+
+/**
+ * Check if a product is pinned in an active live session
+ * @param {string} productId - Product UUID
+ * @param {string} sellerId - Seller UUID
+ * @returns {Promise<boolean>} true if product is pinned in a live session
+ */
+const isProductPinnedInLiveSession = async (productId, sellerId) => {
+  // Find live sessions for this seller
+  const { data: liveSessions } = await supabaseAdmin
+    .from('live_sessions')
+    .select('id')
+    .eq('seller_id', sellerId)
+    .eq('status', 'live');
+
+  if (!liveSessions || liveSessions.length === 0) return false;
+
+  const liveSessionIds = liveSessions.map(s => s.id);
+
+  // Check if product is pinned in any of those sessions
+  const { data: pinnedEntries } = await supabaseAdmin
+    .from('session_products')
+    .select('id')
+    .eq('product_id', productId)
+    .in('session_id', liveSessionIds)
+    .not('pinned_at', 'is', null)
+    .limit(1);
+
+  return pinnedEntries && pinnedEntries.length > 0;
+};
 
 /**
  * List Products - Get seller's products (paginated)
@@ -17,12 +48,8 @@ export const listProducts = async (req, res, next) => {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100); // Max 100
     const offset = parseInt(req.query.offset) || 0;
 
-    // Query products with pagination (RLS automatically filters by seller_id)
-    const { data: products, error, count } = await supabase
-      .from('products')
-      .select('*', { count: 'exact' })
-      .eq('seller_id', sellerId)
-      .is('deleted_at', null) // Exclude soft-deleted products
+    const { data: products, error, count } = await sellerSelect('products', sellerId, '*', { count: 'exact' })
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -58,7 +85,7 @@ export const createProduct = async (req, res, next) => {
     const { name, price, image_url, stock, description } = req.body;
 
     // Validate required fields
-    if (!name || !price) {
+    if (!name || price === undefined || price === null) {
       return res.status(400).json({
         error: { message: 'Name and price are required', status: 400 }
       });
@@ -79,7 +106,7 @@ export const createProduct = async (req, res, next) => {
     }
 
     // Create product
-    const { data: product, error } = await supabase
+    const { data: product, error } = await supabaseAdmin
       .from('products')
       .insert([{
         seller_id: sellerId,
@@ -121,12 +148,8 @@ export const getProductById = async (req, res, next) => {
     const sellerId = req.user.id;
     const { id } = req.params;
 
-    // Query product (RLS ensures seller can only access their own products)
-    const { data: product, error } = await supabase
-      .from('products')
-      .select('*')
+    const { data: product, error } = await sellerSelect('products', sellerId)
       .eq('id', id)
-      .eq('seller_id', sellerId)
       .is('deleted_at', null)
       .single();
 
@@ -152,6 +175,14 @@ export const updateProduct = async (req, res, next) => {
     const sellerId = req.user.id;
     const { id } = req.params;
     const { name, price, image_url, stock, description } = req.body;
+
+    // Check if product is pinned in a live session
+    const isPinned = await isProductPinnedInLiveSession(id, sellerId);
+    if (isPinned) {
+      return res.status(400).json({
+        error: { message: 'Cannot update a product while it is pinned in an active live session', status: 400 }
+      });
+    }
 
     // Validate price if provided
     if (price !== undefined) {
@@ -185,8 +216,7 @@ export const updateProduct = async (req, res, next) => {
       });
     }
 
-    // Update product (RLS ensures seller can only update their own products)
-    const { data: product, error } = await supabase
+    const { data: product, error } = await supabaseAdmin
       .from('products')
       .update(updates)
       .eq('id', id)
@@ -224,8 +254,16 @@ export const deleteProduct = async (req, res, next) => {
     const sellerId = req.user.id;
     const { id } = req.params;
 
+    // Check if product is pinned in a live session
+    const isPinned = await isProductPinnedInLiveSession(id, sellerId);
+    if (isPinned) {
+      return res.status(400).json({
+        error: { message: 'Cannot delete a product while it is pinned in an active live session', status: 400 }
+      });
+    }
+
     // Soft delete (set deleted_at)
-    const { data: product, error } = await supabase
+    const { data: product, error } = await supabaseAdmin
       .from('products')
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', id)

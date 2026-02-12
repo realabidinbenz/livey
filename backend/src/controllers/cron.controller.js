@@ -65,7 +65,7 @@ export const syncSheets = async (req, res, next) => {
       .from('orders')
       .select('*')
       .eq('google_sheets_synced', false)
-      .lte('sync_retry_count', 10) // Give up after 10 retries
+      .lt('sync_retry_count', 10) // Give up after 10 retries (0-9)
       .order('created_at', { ascending: true })
       .limit(50);
 

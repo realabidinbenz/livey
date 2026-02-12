@@ -1,5 +1,8 @@
+import crypto from 'crypto';
 import { supabaseAdmin } from '../config/supabase.js';
+import { sellerSelect } from '../utils/query.js';
 import { syncOrderToSheets } from '../services/sheets.sync.service.js';
+import { normalizePhone } from '../middleware/validation.middleware.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -11,62 +14,14 @@ import logger from '../utils/logger.js';
  */
 
 /**
- * Generate Order Number with retry on collision
- * Format: ORD-YYYYMMDD-001 (sequential per day per seller)
+ * Generate Order Number (race-condition free)
+ * Format: ORD-YYYYMMDD-XXXX (date + 4-char random hex)
+ * No DB query needed. Collision probability: ~1 in 65,536 per day.
  */
-const generateOrderNumber = async (sellerId) => {
-  const today = new Date().toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
-  const prefix = `ORD-${today}`;
-
-  // Get today's order count for this seller
-  const { count, error } = await supabaseAdmin
-    .from('orders')
-    .select('*', { count: 'exact', head: true })
-    .eq('seller_id', sellerId)
-    .like('order_number', `${prefix}-%`);
-
-  if (error) {
-    logger.error('Failed to count orders', { sellerId, error: error.message });
-    throw new Error('Failed to generate order number');
-  }
-
-  const sequence = String(count + 1).padStart(3, '0');
-  return `${prefix}-${sequence}`;
-};
-
-/**
- * Insert order with retry on order_number collision
- * If two concurrent requests generate the same number, retry with count+1
- */
-const insertOrderWithRetry = async (orderData, sellerId, maxRetries = 3) => {
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const orderNumber = attempt === 0
-      ? orderData.order_number
-      : await generateOrderNumber(sellerId);
-
-    const { data: order, error } = await supabaseAdmin
-      .from('orders')
-      .insert([{ ...orderData, order_number: orderNumber }])
-      .select()
-      .single();
-
-    if (!error) return { order, error: null };
-
-    // If it's a unique constraint violation on order_number, retry
-    const isDuplicate = error.message?.includes('duplicate') ||
-                        error.message?.includes('unique') ||
-                        error.code === '23505';
-
-    if (!isDuplicate || attempt === maxRetries - 1) {
-      return { order: null, error };
-    }
-
-    logger.warn('Order number collision, retrying', {
-      orderNumber,
-      attempt: attempt + 1,
-      sellerId
-    });
-  }
+const generateOrderNumber = () => {
+  const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
+  const random = crypto.randomBytes(2).toString('hex');
+  return `ORD-${today}-${random}`;
 };
 
 /**
@@ -110,9 +65,23 @@ export const createOrder = async (req, res, next) => {
       });
     }
 
-    // Validate phone format (Algerian: 05, 06, 07 + 8 digits)
+    // Validate field lengths (prevent abuse + Google Sheets cell overflow)
+    if (customer_name.length > 100) {
+      return res.status(400).json({
+        error: { message: 'Customer name must be 100 characters or less', status: 400 }
+      });
+    }
+
+    if (customer_address.length > 500) {
+      return res.status(400).json({
+        error: { message: 'Customer address must be 500 characters or less', status: 400 }
+      });
+    }
+
+    // Normalize and validate phone (handles +213, spaces, dashes)
+    const normalizedPhone = normalizePhone(customer_phone);
     const phoneRegex = /^(05|06|07)\d{8}$/;
-    if (!phoneRegex.test(customer_phone)) {
+    if (!phoneRegex.test(normalizedPhone)) {
       return res.status(400).json({
         error: {
           message: 'Invalid phone number. Must be 10 digits starting with 05, 06, or 07',
@@ -138,8 +107,8 @@ export const createOrder = async (req, res, next) => {
     // Calculate total price (server-side, never trust client)
     const totalPrice = product.price * orderQuantity;
 
-    // Generate order number
-    const orderNumber = await generateOrderNumber(product.seller_id);
+    // Generate order number (random hex, no DB query needed)
+    const orderNumber = generateOrderNumber();
 
     // Decrease stock if stock tracking is enabled (stock is not null)
     if (product.stock !== null) {
@@ -159,14 +128,14 @@ export const createOrder = async (req, res, next) => {
       }
     }
 
-    // Create order with retry on number collision
+    // Create order (random hex order number eliminates race conditions)
     const orderData = {
       order_number: orderNumber,
       session_id: session_id || null,
       product_id: product.id,
       seller_id: product.seller_id,
       customer_name: customer_name.trim(),
-      customer_phone: customer_phone.trim(),
+      customer_phone: normalizedPhone,
       customer_address: customer_address.trim(),
       product_name: product.name,
       product_price: product.price,
@@ -175,10 +144,11 @@ export const createOrder = async (req, res, next) => {
       status: 'pending'
     };
 
-    const { order, error: orderError } = await insertOrderWithRetry(
-      orderData,
-      product.seller_id
-    );
+    const { data: order, error: orderError } = await supabaseAdmin
+      .from('orders')
+      .insert([orderData])
+      .select()
+      .single();
 
     if (orderError || !order) {
       logger.error('Create order failed', {
@@ -225,10 +195,7 @@ export const listOrders = async (req, res, next) => {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100); // Max 100
     const offset = parseInt(req.query.offset) || 0;
 
-    const { data: orders, error, count } = await supabaseAdmin
-      .from('orders')
-      .select('*', { count: 'exact' })
-      .eq('seller_id', sellerId)
+    const { data: orders, error, count } = await sellerSelect('orders', sellerId, '*', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -262,11 +229,8 @@ export const getOrderById = async (req, res, next) => {
     const sellerId = req.user.id;
     const { id } = req.params;
 
-    const { data: order, error } = await supabaseAdmin
-      .from('orders')
-      .select('*')
+    const { data: order, error } = await sellerSelect('orders', sellerId)
       .eq('id', id)
-      .eq('seller_id', sellerId)
       .single();
 
     if (error || !order) {

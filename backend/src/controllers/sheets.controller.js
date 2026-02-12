@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../config/supabase.js';
+import { sellerSelect } from '../utils/query.js';
 import { encrypt, decrypt } from '../utils/encryption.js';
 import {
   getAuthUrl,
@@ -139,10 +140,7 @@ export const status = async (req, res, next) => {
     const sellerId = req.user.id;
 
     // Query connection
-    const { data: connection } = await supabaseAdmin
-      .from('google_sheets_connections')
-      .select('*')
-      .eq('seller_id', sellerId)
+    const { data: connection } = await sellerSelect('google_sheets_connections', sellerId)
       .single();
 
     if (!connection) {
@@ -152,12 +150,10 @@ export const status = async (req, res, next) => {
       });
     }
 
-    // Count pending syncs
-    const { count: pendingSyncCount } = await supabaseAdmin
-      .from('orders')
-      .select('*', { count: 'exact', head: true })
-      .eq('seller_id', sellerId)
-      .eq('google_sheets_synced', false);
+    // Count pending syncs (exclude orders that exceeded max retries)
+    const { count: pendingSyncCount } = await sellerSelect('orders', sellerId, '*', { count: 'exact', head: true })
+      .eq('google_sheets_synced', false)
+      .lt('sync_retry_count', 10);
 
     res.json({
       connected: true,
@@ -185,10 +181,7 @@ export const test = async (req, res, next) => {
     const sellerId = req.user.id;
 
     // Get connection
-    const { data: connection } = await supabaseAdmin
-      .from('google_sheets_connections')
-      .select('*')
-      .eq('seller_id', sellerId)
+    const { data: connection } = await sellerSelect('google_sheets_connections', sellerId)
       .single();
 
     if (!connection) {
@@ -288,10 +281,7 @@ export const disconnect = async (req, res, next) => {
     const sellerId = req.user.id;
 
     // Get connection to revoke token
-    const { data: connection } = await supabaseAdmin
-      .from('google_sheets_connections')
-      .select('*')
-      .eq('seller_id', sellerId)
+    const { data: connection } = await sellerSelect('google_sheets_connections', sellerId)
       .single();
 
     if (!connection) {

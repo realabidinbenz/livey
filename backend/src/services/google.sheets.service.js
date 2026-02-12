@@ -32,17 +32,6 @@ const getSheetsClient = (accessToken) => {
 };
 
 /**
- * Get authenticated Drive API client
- * @param {string} accessToken - Valid Google access token
- * @returns {Object} Drive API client
- */
-const getDriveClient = (accessToken) => {
-  const oauth2Client = new google.auth.OAuth2();
-  oauth2Client.setCredentials({ access_token: accessToken });
-  return google.drive({ version: 'v3', auth: oauth2Client });
-};
-
-/**
  * Create a new Google Spreadsheet with header row
  * @param {string} accessToken - Valid Google access token
  * @param {string} title - Spreadsheet title (optional)
