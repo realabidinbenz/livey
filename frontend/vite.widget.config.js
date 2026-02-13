@@ -16,7 +16,7 @@ export default defineConfig({
         },
         outDir: 'dist/widget',
         cssCodeSplit: false,       // Inline CSS into JS
-        minify: 'terser',
+        minify: 'esbuild',
         rollupOptions: {
             output: {
                 inlineDynamicImports: true

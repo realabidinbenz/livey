@@ -62,8 +62,9 @@ export const createSpreadsheet = async (accessToken, title = 'Livey Orders') => 
 
     const spreadsheetId = createResponse.data.spreadsheetId;
     const spreadsheetUrl = createResponse.data.spreadsheetUrl;
+    const sheetId = createResponse.data.sheets[0].properties.sheetId;
 
-    logger.info('Spreadsheet created', { spreadsheetId, title });
+    logger.info('Spreadsheet created', { spreadsheetId, sheetId, title });
 
     // Add header row
     await sheets.spreadsheets.values.update({
@@ -83,7 +84,7 @@ export const createSpreadsheet = async (accessToken, title = 'Livey Orders') => 
           {
             repeatCell: {
               range: {
-                sheetId: 0,
+                sheetId,
                 startRowIndex: 0,
                 endRowIndex: 1
               },

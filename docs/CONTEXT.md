@@ -1,7 +1,7 @@
 # Livey - Development Context
 
-## Current Phase: Phase 4 Complete → Ready for Phase 5
-## Last Updated: 2026-02-12 (Session 9 - Phase 4 Implementation)
+## Current Phase: Phase 4 Complete + Bugs Fixed + Manual Tests Passed → Ready for Phase 5
+## Last Updated: 2026-02-13 (Session 10 - Phase 4 Bug Fixes + Manual Testing)
 
 ---
 
@@ -99,9 +99,37 @@
 - ✅ Soft delete for chat messages
 - ✅ **126 unit tests passing** (+37 new Phase 3 tests)
 
+### Phase 4 Bug Fixes + Manual Testing (Session 10 - ✅ COMPLETE)
+- ✅ **CRITICAL:** Fixed `handleError()` self-catching throw in widget API service (error messages now propagate)
+- ✅ Added `removeMessage` callback for failed chat message rollback (optimistic UI)
+- ✅ Phone validation now normalizes spaces/dashes before regex (`05 51 23 45 67` accepted)
+- ✅ Quantity buttons use `setValue()` instead of fragile DOM hack
+- ✅ YouTube `onYouTubeIframeAPIReady` chains callbacks instead of overwriting global
+- ✅ Backend widget endpoint validates sessionId as UUID (defense-in-depth)
+- ✅ Fixed `createSpreadsheet` hardcoded `sheetId: 0` → reads actual ID from response
+- ✅ Widget build: switched from `terser` (missing dep) to `esbuild` minifier
+- ✅ Widget bundle: 139 KB gzipped (under 200 KB target)
+- ✅ **174 total tests passing** (130 backend + 44 frontend)
+- ✅ **Phase 2 manual tests ALL PASSED:**
+  - OAuth flow: connect, authorize, verify status
+  - Order auto-sync to Google Sheets (rows appear within seconds)
+  - Disconnect + skip sync (orders save to DB with `google_sheets_synced: false`)
+  - Background retry via cron endpoint (unsynced orders picked up)
+  - Reconnect + verify Sheet populated
+
 ---
 
 ## 🔧 Bugs Fixed
+
+### Session 10 - Phase 4 Review + Manual Testing
+11. **handleError() self-catching throw** - API errors always returned generic "Request failed" → now propagates actual message
+12. **Failed chat messages stuck in UI** - Optimistic messages never removed on error → added removeMessage rollback
+13. **Phone regex too strict** - Rejected `05 51 23 45 67` → normalize before validating
+14. **Quantity buttons DOM hack** - Used `document.getElementById` + `dispatchEvent` → `setValue()`
+15. **YouTube global callback collision** - Second widget overwrites first → callback chaining
+16. **Widget sessionId no validation** - No format check on URL param → UUID regex validation
+17. **Spreadsheet sheetId hardcoded to 0** - Google doesn't guarantee first sheet is ID 0 → read from create response
+18. **Widget build missing terser** - `minify: 'terser'` but not installed → switched to `esbuild`
 
 ### Session 5 - Phase 2 Review
 1. **Off-by-one retry limit** - `.lte(10)` → `.lt(10)`
@@ -145,9 +173,11 @@
   - All 5 manual tests with copy-paste ready commands
   - Extensive troubleshooting section
 
-### Before Phase 3
-- [ ] Manual testing of Phase 2 OAuth flow with real Google account
-- [ ] Verify orders sync automatically when Sheets connected
+### Phase 2 Manual Testing ✅ COMPLETE
+- [x] Manual testing of Phase 2 OAuth flow with real Google account
+- [x] Verify orders sync automatically when Sheets connected
+- [x] Verify disconnect skips sync gracefully
+- [x] Verify cron retry picks up unsynced orders
 
 ---
 
@@ -172,6 +202,7 @@
 | 7 | Planning | **Library recommendations: YouTube URL parser, frontend stack decisions, 23 new tests** |
 | 8 | Phase 3 | **Live sessions backend: sessions controller (6 endpoints), chat controller (3 endpoints), pinned-product guard, 37 new tests, phase3.md** |
 | 9 | Phase 4 | **Widget frontend: embeddable widget with YouTube player, product card, chat panel, order form, realtime updates, 25 frontend tests, phase4.md** |
+| 10 | Phase 4 | **Bug fixes (8 bugs), manual Phase 2 testing (all passed), 174 total tests (130 backend + 44 frontend)** |
 
 ---
 
@@ -188,7 +219,7 @@
 
 - **API Endpoints:** 30 (11 Phase 1, 8 Phase 2, 10 Phase 3, 1 Phase 4)
 - **Database Tables:** 7 with RLS
-- **Unit Tests:** 126 backend passing + 25 frontend tests
+- **Unit Tests:** 130 backend passing + 44 frontend tests (174 total)
 - **Backend Files:** 35 source files, all < 800 lines
 - **Frontend Files:** 25 source files (widget + tests)
 - **Migration Files:** 3 (001_initial_schema, 002_orders_sheets_columns, 003_public_rls_policies)
